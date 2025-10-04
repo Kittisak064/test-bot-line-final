@@ -1,36 +1,38 @@
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 from app.services.respond import generate_reply
-from app.services.line_api import send_line_reply
+from app.services.line_api import send_text_message
 
 router = APIRouter()
 
 @router.post("/webhook/line")
 async def line_webhook(request: Request):
-    """
-    รับ webhook จาก LINE Messaging API (ไม่บังคับ verify signature เพื่อความง่ายในการต่อใช้งาน)
-    """
     try:
         body = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+        events = body.get("events", [])
 
-    events = body.get("events", [])
-    for ev in events:
-        if ev.get("type") == "message" and ev["message"]["type"] == "text":
-            user_text = ev["message"]["text"]
-            reply_token = ev["replyToken"]
+        for event in events:
+            if event.get("type") != "message":
+                continue
 
-            bot_resp = await generate_reply(user_text)
+            message = event.get("message", {})
+            if message.get("type") != "text":
+                continue
 
-            # รองรับทั้ง str และ dict
-            if isinstance(bot_resp, str):
-                await send_line_reply(reply_token, bot_resp)
-            elif isinstance(bot_resp, dict):
-                if "text" in bot_resp:
-                    await send_line_reply(reply_token, bot_resp["text"])
-                if bot_resp.get("handover"):
-                    await send_line_reply(reply_token, "👉 กำลังส่งต่อให้แอดมินดูแลต่อค่ะ")
-            else:
-                await send_line_reply(reply_token, "ขออภัยค่ะ ระบบไม่สามารถตอบได้ในขณะนี้ 🙏")
+            user_id = event.get("source", {}).get("userId")
+            user_message = message.get("text", "")
 
-    return {"status": "ok"}
+            # ส่งข้อความไปให้ AI ตอบ
+            bot_reply = await generate_reply(user_message)
+
+            # ส่งกลับไปที่ LINE
+            if user_id and bot_reply:
+                send_text_message(user_id, bot_reply)
+
+        return JSONResponse(content={"status": "ok"})
+
+    except Exception as e:
+        return JSONResponse(
+            content={"status": "error", "detail": str(e)},
+            status_code=500
+        )
