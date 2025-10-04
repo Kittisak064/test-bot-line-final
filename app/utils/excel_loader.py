@@ -2,7 +2,7 @@ import os, datetime, re
 from typing import Dict, List, Any, Optional
 from openpyxl import load_workbook
 
-EXCEL_PATH = os.getenv("EXCEL_FILE", "./data/อีกครั้ง.xlsx")
+EXCEL_PATH = "./app/data/อีกครั้ง.xlsx"
 
 def _sheet_dicts(ws) -> List[Dict[str, Any]]:
     rows = list(ws.iter_rows(values_only=True))
