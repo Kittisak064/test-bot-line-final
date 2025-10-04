@@ -1,19 +1,32 @@
-import os, httpx
+import os
+import httpx
 
-LINE_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
+# ดึง Channel Access Token จาก environment variable
+LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 
-async def send_line_reply(reply_token: str, text: str):
-    """ส่งข้อความกลับไปยัง LINE โดยใช้ replyToken"""
-    if not LINE_ACCESS_TOKEN:
-        return
-    url = "https://api.line.me/v2/bot/message/reply"
+if not LINE_CHANNEL_ACCESS_TOKEN:
+    raise ValueError("กรุณาตั้งค่า environment variable: LINE_CHANNEL_ACCESS_TOKEN")
+
+LINE_REPLY_ENDPOINT = "https://api.line.me/v2/bot/message/reply"
+
+
+async def send_line_reply(reply_token: str, message: str):
+    """
+    ส่งข้อความตอบกลับไปยังผู้ใช้ผ่าน LINE Messaging API
+    """
     headers = {
-        "Authorization": f"Bearer {LINE_ACCESS_TOKEN}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
     }
-    payload = {
+
+    body = {
         "replyToken": reply_token,
-        "messages": [{"type": "text", "text": text}]
+        "messages": [
+            {"type": "text", "text": message}
+        ],
     }
-    async with httpx.AsyncClient(timeout=15) as client:
-        await client.post(url, headers=headers, json=payload)
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(LINE_REPLY_ENDPOINT, headers=headers, json=body)
+        response.raise_for_status()  # ถ้า error จะ raise exception ออกมา
+        return response.json()
