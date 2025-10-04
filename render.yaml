@@ -1,14 +1,17 @@
 services:
   - type: web
-    name: line-excel-chatbot
+    name: test-bot-line-final
     env: python
     plan: free
-    buildCommand: pip install -r requirements.txt
+    runtime: python-3.11
+    buildCommand: pip install --no-cache-dir -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.10.14
-      - key: EXCEL_FILE
-        value: ./data/อีกครั้ง.xlsx
-      - key: BOT_DISPLAY_NAME
-        value: แอดมินบอท
+      - key: EXCEL_PATH
+        value: ./app/data/อีกครั้ง.xlsx
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: LINE_CHANNEL_ACCESS_TOKEN
+        sync: false
+      - key: AI_MODEL
+        value: gpt-4o-mini
