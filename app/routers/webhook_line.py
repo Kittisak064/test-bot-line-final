@@ -1,34 +1,31 @@
-import hmac, hashlib, base64, os, json, asyncio
-from fastapi import APIRouter, Header, Request, HTTPException
+import hmac, hashlib, base64, os, json
+from fastapi import APIRouter, Request, HTTPException
 from app.services.respond import generate_reply
-from app.utils.line_api import send_line_reply
+from app.services.line_api import send_line_reply
 
-router = APIRouter(tags=["line"])
-
+router = APIRouter()
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET", "")
 
-@router.post("/line")
-async def line_webhook(request: Request, x_line_signature: str = Header(None)):
-    body = await request.body()
-
+def verify_signature(body_bytes: bytes, signature: str) -> bool:
     if not LINE_CHANNEL_SECRET:
-        raise HTTPException(status_code=500, detail="LINE_CHANNEL_SECRET not set")
+        return False
+    mac = hmac.new(LINE_CHANNEL_SECRET.encode("utf-8"), msg=body_bytes, digestmod=hashlib.sha256)
+    expected = base64.b64encode(mac.digest()).decode("utf-8")
+    return hmac.compare_digest(expected, signature)
 
-    # Signature verify
-    hash_ = hmac.new(LINE_CHANNEL_SECRET.encode("utf-8"), body, hashlib.sha256).digest()
-    signature = base64.b64encode(hash_).decode()
-    if x_line_signature != signature:
+@router.post("/webhook/line")
+async def line_webhook(request: Request):
+    body_bytes = await request.body()
+    signature = request.headers.get("X-Line-Signature", "")
+    if not verify_signature(body_bytes, signature):
         raise HTTPException(status_code=401, detail="Invalid signature")
 
-    payload = json.loads(body.decode("utf-8"))
-    events = payload.get("events", [])
-    tasks = []
+    body = json.loads(body_bytes.decode("utf-8"))
+    events = body.get("events", [])
     for ev in events:
         if ev.get("type") == "message" and ev["message"]["type"] == "text":
             user_text = ev["message"]["text"].strip()
             reply_token = ev["replyToken"]
-            bot_text = generate_reply(user_text)  # returns string
-            tasks.append(send_line_reply(reply_token, bot_text))
-    if tasks:
-        await asyncio.gather(*tasks)
+            reply_text = await generate_reply(user_text)
+            await send_line_reply(reply_token, reply_text)
     return {"status": "ok"}
