@@ -1,12 +1,19 @@
 import os, httpx
 
-LINE_REPLY_URL = "https://api.line.me/v2/bot/message/reply"
-ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN","")
+LINE_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
 
-async def send_line_reply(reply_token: str, message: str):
-    headers = {"Authorization": f"Bearer {ACCESS_TOKEN}", "Content-Type": "application/json"}
-    payload = {"replyToken": reply_token, "messages": [{"type":"text","text": message[:4900]}]}
+async def send_line_reply(reply_token: str, text: str):
+    """ส่งข้อความกลับไปยัง LINE โดยใช้ replyToken"""
+    if not LINE_ACCESS_TOKEN:
+        return
+    url = "https://api.line.me/v2/bot/message/reply"
+    headers = {
+        "Authorization": f"Bearer {LINE_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "replyToken": reply_token,
+        "messages": [{"type": "text", "text": text}]
+    }
     async with httpx.AsyncClient(timeout=15) as client:
-        r = await client.post(LINE_REPLY_URL, headers=headers, json=payload)
-        if r.status_code != 200:
-            print("LINE API Error:", r.status_code, r.text)
+        await client.post(url, headers=headers, json=payload)
