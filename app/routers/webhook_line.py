@@ -1,5 +1,3 @@
-# app/routers/webhook_line.py
-from __future__ import annotations
 from fastapi import APIRouter, Request
 from app.services.respond import generate_reply
 from app.utils.line_api import send_line_reply
@@ -12,7 +10,16 @@ async def line_webhook(req: Request):
     events = body.get("events", [])
     for ev in events:
         if ev.get("type") == "message" and ev["message"]["type"] == "text":
-            text = ev["message"]["text"]
-            bot_text = await generate_reply(text)
-            await send_line_reply(ev["replyToken"], bot_text)
+            user_text = ev["message"]["text"]
+            reply_token = ev["replyToken"]
+
+            # เรียก AI เพื่อตอบ
+            bot = await generate_reply(user_text)
+
+            # ส่งกลับ LINE
+            await send_line_reply(reply_token, bot["text"])
+
+            # ถ้า handover → แจ้งว่าให้แอดมิน takeover ได้
+            if bot.get("handover"):
+                await send_line_reply(reply_token, "👉 ระบบกำลังส่งต่อให้แอดมินดูแลต่อค่ะ")
     return {"status": "ok"}
