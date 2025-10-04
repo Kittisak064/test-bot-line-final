@@ -2,7 +2,7 @@ import os
 from typing import List, Dict, Any
 from openpyxl import load_workbook
 
-EXCEL_PATH = "./data/อีกครั้ง.xlsx"
+EXCEL_PATH = "app/data/อีกครั้ง.xlsx"
 
 # ===== Helpers =====
 def _safe_str(v) -> str:
