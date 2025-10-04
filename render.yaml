@@ -8,3 +8,7 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.10.14
+      - key: EXCEL_FILE
+        value: ./data/อีกครั้ง.xlsx
+      - key: BOT_DISPLAY_NAME
+        value: แอดมินบอท
