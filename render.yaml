@@ -1,17 +1,15 @@
 services:
   - type: web
-    name: test-bot-line-final
+    name: line-chatbot
     env: python
     plan: free
-    runtime: python-3.11
-    buildCommand: pip install --no-cache-dir -r requirements.txt
+    buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
-      - key: EXCEL_PATH
-        value: ./app/data/อีกครั้ง.xlsx
+      - key: PYTHON_VERSION
+        value: 3.11.9
       - key: OPENAI_API_KEY
         sync: false
       - key: LINE_CHANNEL_ACCESS_TOKEN
         sync: false
-      - key: AI_MODEL
-        value: gpt-4o-mini
+    autoDeploy: true
