@@ -1,42 +1,59 @@
-from app.utils.excel_loader import DATA
+import os
+from openai import OpenAI
+from app.utils.excel_loader import search_product, search_faq, get_sheet
 
-def normalize(text: str) -> str:
-    return str(text).strip().lower()
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-def search_products(message: str):
-    message_norm = normalize(message)
-    results = []
+SYSTEM_PROMPT = """
+คุณคือแชทบอทผู้ช่วยขายสินค้าออนไลน์:
+- พูดคุยสุภาพ เป็นธรรมชาติ
+- ไม่ต้องแสดงรหัสสินค้าให้ลูกค้าเห็น
+- อธิบายคุณสมบัติ ราคา โปรโมชั่น ให้เข้าใจง่าย
+- ถ้าหาคำตอบจาก Excel ได้ → ใช้ข้อมูลนั้น
+- ถ้าไม่มีข้อมูล → ตอบอย่างสุภาพว่าขอให้แอดมินช่วย
+"""
 
-    for sheet_name, df in DATA.items():
-        for _, row in df.iterrows():
-            keywords = [
-                str(row.get("ชื่อสินค้าในระบบขาย", "")),
-                str(row.get("ชื่อสินค้าที่มักถูกเรียก", "")),
-                str(row.get("หมวดหมู่", "")),
-            ]
-            if any(k and normalize(k) in message_norm for k in keywords):
-                results.append({
-                    "name": row.get("ชื่อสินค้าในระบบขาย", ""),
-                    "price": row.get("ราคาขาย", row.get("ราคาเต็ม", "")),
-                    "size": row.get("ขนาด", ""),
-                    "sheet": sheet_name
-                })
-    return results
+async def generate_reply(user_message: str) -> str:
+    # 1) ตรวจสอบว่าเป็น FAQ ก่อน
+    faqs = search_faq(user_message)
+    if faqs:
+        best = faqs[0]
+        return f"{best.get('คำตอบ', 'ขออภัยค่ะ ตอนนี้ยังไม่มีข้อมูล')}"
 
-def generate_reply(user_message: str) -> str:
-    products = search_products(user_message)
-
+    # 2) ตรวจสอบว่าเป็นสินค้าหรือไม่
+    products = search_product(user_message)
     if products:
-        reply_lines = ["สวัสดีค่ะ คุณลูกค้า 😊", "นี่คือสินค้าที่เรามีค่ะ:\n"]
-        for i, p in enumerate(products, 1):
-            line = f"{i}. {p['name']} ราคา {p['price']} บาท"
-            if p["size"]:
-                line += f" (ขนาด {p['size']})"
-            reply_lines.append(line)
-        reply_lines.append("\nคุณลูกค้าสนใจดูรายละเอียดรุ่นไหนเพิ่มเติมคะ? 😃")
-        return "\n".join(reply_lines)
+        best = products[0]
+        name = best.get("ชื่อสินค้าในระบบขาย") or best.get("ชื่อสินค้าที่มักถูกเรียก")
+        price = best.get("ราคาขาย") or best.get("ราคาเต็ม")
+        size = best.get("ขนาด") or ""
+        unit = best.get("หน่วย") or ""
+        promo = _find_promotion_for(name)
 
-    return (
-        "สวัสดีค่ะ คุณลูกค้า 😊 ตอนนี้ยังไม่พบข้อมูลสินค้าที่คุณถามมา\n"
-        "รบกวนแจ้งชื่อสินค้าให้ละเอียดขึ้น หรือพิมพ์คุยกับแอดมินได้เลยค่ะ 🙏"
+        reply = f"สินค้า **{name}** ({size}{unit}) ราคา {price} บาท"
+        if promo:
+            reply += f"\nโปรโมชั่น: {promo}"
+        reply += "\nสนใจสั่งซื้อได้เลยนะคะ"
+        return reply
+
+    # 3) ถ้าไม่เจอ → ส่งให้ OpenAI ตอบเสริม
+    completion = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_message},
+        ],
     )
+    return completion.choices[0].message.content.strip()
+
+
+def _find_promotion_for(product_name: str) -> str:
+    """ค้นหาโปรโมชั่นที่เกี่ยวข้องกับสินค้า"""
+    promotions = get_sheet("โปรโมชั่น")
+    for promo in promotions:
+        if not promo:
+            continue
+        text_all = " ".join([str(v) for v in promo.values() if v])
+        if product_name and product_name in text_all:
+            return promo.get("รายละเอียดโปรโมชั่น") or ""
+    return ""
